@@ -1,0 +1,23 @@
+# 仮想環境
+.venv/
+venv/
+env/
+
+# Python
+__pycache__/
+*.py[cod]
+*.so
+.Python
+
+# データ・キャッシュ（重いのでリポジトリに含めない場合）
+data/
+cache/
+
+# macOS
+.DS_Store
+
+# 誤って作ったフォルダ（git init に URL を渡した結果）
+https:
+
+# Jupyter チェックポイント
+.ipynb_checkpoints/
