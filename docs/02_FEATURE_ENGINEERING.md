@@ -30,7 +30,7 @@
 | 3C3 | 時系列 TE（critic_name, production_company） | critic_name_te_ts, production_company_te_ts |
 | 3C3 | 上記 TE の 3 ビン化 | critic_name_te_ts_bin, production_company_te_ts_bin |
 | 3C3 | 数値のビン | runtime_bin, movie_age_bin, release_decade |
-| experiment_encodings.movie_info_meta | movie_info の長さ・語数（元列は残す） | movie_info_len, movie_info_word_count |
+| lib.encodings.movie_info_meta | movie_info の長さ・語数（元列は残す） | movie_info_len, movie_info_word_count |
 | ノート内 | movie_title の長さ・語数（元列は残す） | movie_title_len, movie_title_word_count |
 
 **ベース 38 列**: rotten_tomatoes_link, critic_name, top_critic, publisher_name, movie_title, movie_info, content_rating, directors, authors, actors, runtime, production_company, review_year, review_month, review_dayofweek, release_year, release_month, release_dayofweek, movie_age_days, genre_Drama〜Documentary（8列）, critic_name_te_ts, production_company_te_ts, critic_name_te_ts_bin, production_company_te_ts_bin, runtime_bin, movie_age_bin, release_decade, movie_info_len, movie_info_word_count, movie_title_len, movie_title_word_count.
@@ -87,12 +87,35 @@
 
 ## 4. 段階的組み合わせ実験
 
-改善した 9 パターンを「1個ずつ足す」形で段階的に増やし、CV AUC の変化を確認する。
+改善した 9 パターンを「1個ずつ足す」形で段階的に増やし、CV AUC の変化を確認した。さらに各ステージの提出ファイルを Kaggle パブリックで検証した。
 
 - **やり方**: `train_feature_engineering.ipynb` の「段階的組み合わせ実験」セルを、**15パターン作成＋単体 CV のセル実行後に**実行する。
 - **ステージ**: stage0_base（38列）→ stage1（+p03）→ stage2（+p03+p15）→ … → stage9（+9パターン、47列）。
 - **追加列の順番**（単体 AUC の良い順）: p03 → p15 → p07 → p11 → p05 → p14 → p01 → p04 → p09。
-- 実行後、セル出力の表をこの節に転記して「段階的組み合わせの結果」として残す。
+
+### 4.1 CV 結果（時系列 CV）
+
+| stage | n_feat | CV_AUC | std | diff_vs_base |
+|-------|--------|--------|-----|--------------|
+| stage0_base | 38 | 0.760220 | 0.005580 | 0.000000 |
+| stage1_+1patterns | 39 | 0.761211 | 0.004887 | 0.000991 |
+| stage2_+2patterns | 40 | 0.760531 | 0.004706 | 0.000311 |
+| stage3_+3patterns | 41 | 0.760374 | 0.005525 | 0.000153 |
+| stage4_+4patterns | 42 | 0.759986 | 0.005787 | -0.000234 |
+| stage5_+5patterns | 43 | 0.760613 | 0.004838 | 0.000393 |
+| stage6_+6patterns | 44 | 0.761166 | 0.004157 | 0.000946 |
+| stage7_+7patterns | 45 | 0.761520 | 0.004703 | 0.001300 |
+| stage8_+8patterns | 46 | 0.760895 | 0.004285 | 0.000674 |
+| stage9_+9patterns | 47 | 0.761034 | 0.004800 | 0.000814 |
+
+CV では stage7（+7パターン）が最高 0.7615。
+
+### 4.2 パブリックスコアでの検証結果
+
+stage0〜stage9 の提出ファイルをそれぞれ Kaggle に提出してパブリックスコアを取得した。**いずれのステージもベース（stage0 または従来の 38 列提出）よりスコアが下がった。**
+
+- **結論**: 改善 9 パターンの段階的追加は **本番では採用しない（全部ボツ）**。CV では伸びていてもパブリックでは過学習または分布差で効かなかったと判断する。
+- 運用上のベースラインは **38 列のまま** とする。
 
 ---
 
@@ -111,9 +134,8 @@
 
 ## 6. 今後の作戦
 
-- 単体では伸びに限界があるため、**掛け合わせ（交互作用）** を少数ずつ足して CV で比較する。
-- 候補: 批評家の傾向 × ジャンル、制作会社の傾向 × 年代、runtime_bin × ジャンル など、**メタ情報同士の掛け合わせ**を優先。
-- 一気に大量に足すと過学習しやすいので、1〜2 本ずつ試す。
+- **掛け合わせ 9 パターンの段階的追加はパブリックで全パターンスコア低下のため採用見送り**（§4.2）。ベースは 38 列のまま。
+- 今後の候補: 別軸の追加（publisher_name_freq、テキスト lda_10 など 01 で微増したもの）、ハイパーパラメータの探索、CV の切り方の見直し。掛け合わせを足す場合は 1〜2 本に絞り、パブリックで必ず検証する。
 
 ---
 

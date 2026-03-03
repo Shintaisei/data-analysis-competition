@@ -154,7 +154,6 @@ REGISTRY = {
     "doc2vec_32": (lambda mi_tr, mi_val, mi_te: build_doc2vec(mi_tr, mi_val, mi_te, 32), True, False),
     "word2vec_32": (lambda mi_tr, mi_val, mi_te: build_word2vec_avg(mi_tr, mi_val, mi_te, 32), True, False),
     "sentence_transformer_32": None,  # 特別扱い: st_emb を渡す
-    # 結合テキスト（movie_title + movie_info）をベクトル化。prefix は他と被らないよう ct_* に。
     "concat_mi_title_tfidf_50": (lambda a, b, c: build_tfidf(a, b, c, 50, "ct_tfidf"), True, False),
     "concat_mi_title_tfidf_svd20": (lambda a, b, c: build_tfidf_svd(a, b, c, 200, 20, "ct_tfidf_svd"), True, False),
     "concat_mi_title_count_50": (lambda a, b, c: build_count(a, b, c, 50, "ct_count"), True, False),

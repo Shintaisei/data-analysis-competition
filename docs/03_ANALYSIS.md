@@ -2,6 +2,8 @@
 
 01_PREPROCESS.md と 02_FEATURE_ENGINEERING.md を踏まえ、**現状実装でまだ改善できそうなところ**を洗い出し、**次に試すべきこと**を優先度付きでまとめる。
 
+※ ノートの実行結果（提出用・分析用・実験用 CSV）はすべて `outputs/` 以下（`submissions/`, `analysis/`, `experiments/`）に保存される。
+
 ---
 
 ## 1. 現状サマリ（01・02 から）
@@ -12,7 +14,7 @@
 | **効いたこと** | 時系列 TE 追加（critic_name, production_company）。ビン追加（runtime_bin, movie_age_bin, release_decade）。既存を残して「足す」だけ。 |
 | **効かなかったこと** | 8 列の TE/頻度置き換え、directors/authors の TE・LOO・頻度、movie_title の頻度置き換え、critic_name の LOO。 |
 | **テキスト** | movie_info の TF-IDF/LDA 等は +0.0001〜0.0006 の微増。lda_10 が最大 +0.0006。 |
-| **掛け合わせ** | 15 パターン中 9 パターンがベースより改善。ベスト単体は p03（critic_te × genre_Documentary）で +0.0010。9 個を段階的に足す実験はノートで実行可能だが、**結果が 02 に未反映**。 |
+| **掛け合わせ** | 15 パターン中 9 パターンが CV で改善。ベスト単体は p03 で +0.0010。段階的組み合わせ（stage0〜9）をパブリックで検証したところ **全ステージでベースよりスコア低下 → 全部ボツ、採用見送り**（02 §4.2）。 |
 
 ---
 
@@ -22,8 +24,8 @@
 
 | 観点 | 現状 | 改善の余地 |
 |------|------|------------|
-| **特徴量定義の分散** | 38 列のうち、create_features は日付・ジャンル・content_rating, publisher_name のみ。3C3・テキストメタ・カテゴリ 8 列の扱いは **train_baseline / train_feature_engineering のノート内** に直書き。feature_engineering/features.py の FEATURES は 19 列で、ノートの 38 列と一致していない。 | 運用ベースを「ノートの FEATURES リスト」に揃えたまま、**どこまでを create_features / experiment_encodings に寄せるか** を整理すると、再現や Kaggle 提出時のミスが減る。必須ではない。 |
-| **3C3 の再利用** | 時系列 TE とビンは train_baseline / train_feature_engineering のノートに同じコードが 2 回書かれている。 | experiment_encodings に「3C3 用の時系列 TE ＋ ビン」を関数化して呼び出すと、ノートが短くなり変更漏れを防げる。 |
+| **特徴量定義の分散** | 38 列のうち、create_features は日付・ジャンル・content_rating, publisher_name のみ。3C3・テキストメタ・カテゴリ 8 列の扱いは **train_baseline / train_feature_engineering のノート内** に直書き。feature_engineering/features.py の FEATURES は 19 列で、ノートの 38 列と一致していない。 | 運用ベースを「ノートの FEATURES リスト」に揃えたまま、**どこまでを create_features / lib.encodings に寄せるか** を整理すると、再現や Kaggle 提出時のミスが減る。必須ではない。 |
+| **3C3 の再利用** | 時系列 TE とビンは train_baseline / train_feature_engineering のノートに同じコードが 2 回書かれている。 | lib.encodings に「3C3 用の時系列 TE ＋ ビン」を関数化して呼び出すと、ノートが短くなり変更漏れを防げる。 |
 | **欠損処理** | runtime は train の中央値で埋め。movie_age_days の負値は NaN にしている。 | 01 では欠損フラグは「変化なし」。現状の欠損処理で十分。特に対応不要。 |
 
 ### 2.2 まだ取り込んでいない「効いた」追加
@@ -32,13 +34,13 @@
 |------|-----------------|------|------------|
 | **publisher_name_freq** | 01: category は残したまま出現回数を**追加**で +0.0003。 | ベース 38 列には入っていない。 | 1 列足すだけなので、**ノートで追加して CV 比較**すれば取り込み可否を判断できる。 |
 | **テキストベクトル lda_10** | 01: movie_info に LDA(10) を**追加**で +0.0006（テキスト系で最大）。 | ベースはテキストメタ（長さ・語数）のみ。TF-IDF/LDA は train_text_vector_experiments で比較したが、ベースライン側には組み込んでいない。 | ベース 38 ＋ lda_10 を **train_baseline や train_feature_engineering の 1 設定として追加**し、CV で 38 のみと比較する価値あり。 |
-| **改善 9 パターンの採用** | 02: p03 単体で +0.0010。9 パターンは「段階的組み合わせ」でノート実行可能。 | train_baseline は 38 列のみ。train_feature_engineering で 9 パターン追加した場合の **段階的結果（stage1〜9 の AUC）が 02 に未記載**。 | **段階的組み合わせを 1 回実行し、結果を 02 に転記**。そのうえで「ベースラインを 38＋p03」や「38＋改善 9 列」にするか決めるとよい。 |
+| **改善 9 パターンの採用** | 02: p03 単体で CV +0.0010。段階的組み合わせで stage0〜9 の提出をパブリック検証済み。 | **パブリックでは全ステージでベースよりスコア低下のため採用見送り**（02 §4.2）。 | 9 パターンの段階的追加はボツ。ベースは 38 列のまま。別軸（publisher_name_freq, lda_10 等）やハイパラ探索を検討。 |
 
 ### 2.3 実験・検証まわり
 
 | 観点 | 現状 | 改善の余地 |
 |------|------|------------|
-| **段階的組み合わせの結果** | 02 §4 に「実行後、セル出力の表を転記」とあるが未実施。 | **train_feature_engineering の段階的組み合わせセルを実行し、stage0〜9 の CV_AUC を 02 に追記**する。 |
+| **段階的組み合わせの結果** | CV 結果は 02 §4.1 に転記済み。stage0〜9 の提出をパブリックで検証し、**全パターンでベースよりスコア低下**。02 §4.2 に結論（全部ボツ）を記載済み。 | 特になし。 |
 | **テキストベクトル未実施 config** | 01: nmf_20, concat_mi_title_* , doc2vec_32, word2vec_32, sentence_transformer_32 は未記録または未実施。 | 優先度は低い（テキストは微増止まり）。再開するなら train_text_vector_experiments の「再開用」で nmf_20 から。 |
 | **ハイパーパラメータ** | LGB は n_estimators=100, learning_rate=0.1, num_leaves=31, early_stopping=20 で固定。 | チューニングはまだしていない。**特徴量を固めたあと**に、optuna 等で n_estimators / learning_rate / num_leaves などを探索する余地あり。 |
 | **検証の切り方** | 時系列 CV（val years = 2013〜2016）のみ。 | 同じ切り方で一貫しているので問題なし。別の val 年や holdout を足す必要は現時点では薄い。 |
@@ -53,41 +55,89 @@
 
 ---
 
-## 3. 次に試すべきこと（優先度付き）
+## 3. 予測結果（当たり/外れ）から見えたこと
 
-### 優先度 高（すぐ効く・穴埋め）
+`train_with_predictions.csv` と `prediction_summary_by_*.csv` をもとに、モデルがどこで外しているかを整理する。
 
-1. **段階的組み合わせの実行と 02 への反映**  
-   train_feature_engineering の「段階的組み合わせ実験」セルを実行し、stage0〜9 の CV_AUC 表を **02_FEATURE_ENGINEERING.md §4** に転記する。どの段階まで足すと良くて、どこから過学習気味になるかを残す。
+### 3.1 全体傾向
 
-2. **ベースラインへの「改善 1 列」の取り込み**  
-   最も効いた **p03（critic_te_x_genre_Documentary）** を、train_baseline の FEATURES に 1 列追加して CV を回し、提出用パイプラインを「38 列 → 39 列」にするかどうか決める。比較用に「38 列のまま」の結果も 1 行残すとよい。
+- 時系列 fold の accuracy はおおむね **0.719〜0.721** で安定。
+- ただし year ごとの AUC は差があり、**2015 年が最弱（AUC=0.7512）**。
+- 予測ラベルの傾向として、全 year で **pred_pos_rate が pos_rate より高い**（例: 2016 は 0.7686 vs 0.6604）。
+- その結果、**FP_rate が高め（約 0.54〜0.57）**、FN_rate は比較的低い（約 0.13）という「陽性寄り」な判定傾向が出ている。
 
-### 優先度 中（試す価値あり）
+### 3.2 セグメント別の弱点
 
-3. **publisher_name_freq の追加**  
-   01 で +0.0003 だった。既存列は残したまま 1 列足すだけなので、train_baseline または train_feature_engineering で 1 設定として追加し、CV で 38（または 39）列と比較する。
+- **review_year**: 2015 年の AUC が最低（0.7512）。年ドリフトの影響候補。
+- **content_rating**: NC17 が最低（AUC=0.7312, n=240）。サンプルが少なく不安定だが弱点候補。
+- **genre_Documentary=1**: AUC=0.7149（n=14,931）で明確に弱い。
+- **top_critic=True**: AUC=0.7467（n=54,956）で False より弱い。
 
-4. **テキスト lda_10 の 1 設定追加**  
-   movie_info に LDA(10) を**追加**した設定を、train_baseline か train_feature_engineering で 1 本だけ追加し、「38 列 vs 38＋lda_10」で CV 比較する。テキストは微増だが、ベースラインに未取り込みなので 1 回は試す価値あり。
+### 3.3 重要度から見た示唆
 
-5. **3C3 の共通化**  
-   時系列 TE とビンの計算を experiment_encodings などの共通モジュールに切り出し、train_baseline と train_feature_engineering の両方から呼ぶ。コードの重複削減と変更漏れ防止用。
+- 上位は `directors`, `authors`, `rotten_tomatoes_link`, `movie_title`, `critic_name` など高カード列が中心。
+- 一方で 0 重要度の列が多い（`runtime_bin`, `movie_age_bin`, `release_decade`, 複数 genre など）。
+- 現状の 3C3 の一部やビン列は、ベースラインでは寄与が薄い可能性がある。
 
-### 優先度 低（余裕があれば）
+### 3.4 `train_metric_driven_experiments.ipynb` で試すこと
 
-6. **ハイパーパラメータの探索**  
-   特徴量を 38＋α で固めたあと、LGB の n_estimators / learning_rate / num_leaves などを optuna 等で探索する。
+このノートは、**「AUC だけでなく弱点セグメントと誤差バランスを同時に改善できるか」** を検証するための実験ノート。
 
-7. **テキストベクトル実験の再開**  
-   nmf_20 以降（concat_mi_title_* 等）を train_text_vector_experiments の再開用で実行。テキストは伸びが小さいため、優先度は低くてよい。
-
-8. **監督・著者まわりの「足す」案**  
-   directors / authors は TE・頻度はやらない。代わりに「監督が複数いるか」（カンマ数などから 0/1 や本数）を 1 列だけ足す案は、方針に反しないので余裕があれば試せる。
+- ベースは `lib.get_baseline_data()` の 38 列で固定し、そこに **少数の追加列**だけを足して比較する。
+- 比較する設定は次の 6 つ（`EXPERIMENT_CONFIGS`）:
+  - `base`
+  - `publisher_freq`（publisher の出現頻度）
+  - `doc_x_critic_te`（`genre_Documentary * critic_name_te_ts`）
+  - `year_norm_x_critic_te`（年正規化 × critic TE）
+  - `topcritic_x_critic_te`（top_critic × critic TE）
+  - `publisher_freq__doc_x_critic_te`（上記 2 つの同時追加）
+- 各設定で時系列CVを回し、`metric_driven_experiment_results.csv` に次を保存:
+  - 全体性能: `auc_mean`, `auc_std`, `logloss_mean`, `brier_mean`
+  - 誤差バランス: `fp_rate_mean`, `fn_rate_mean`, `pos_gap_mean`
+  - 弱点セグメント: `auc_review_2015`, `auc_doc_1`, `auc_topcritic_true`
+- 目的は「全体AUCの微増」だけでなく、**2015 / Documentary / top_critic=True の弱点が改善しているか** を同時に見ること。
 
 ---
 
-## 4. まとめ
+## 4. 次に試すべきこと（誤差分析ベース、優先度付き）
 
-- **実装でまだ改善できそうなところ**: 特徴量定義の分散、3C3 の重複、**未取り込みの効いた追加**（publisher_name_freq, lda_10, 改善 9 パターン）、**段階的組み合わせ結果の未記載**、LGB の未チューニング。
-- **次にやるとよいこと**: (1) 段階的組み合わせの実行と 02 への結果転記、(2) ベースラインへの p03 の 1 列追加と CV 比較、(3) publisher_name_freq と lda_10 の 1 設定追加、の順で進めると、漏れがなくかつ 01・02 の知見を活かせる。
+### 優先度 高（まずやる）
+
+1. **2015 年ドリフト対策の時系列特徴を 1〜2 列だけ追加**
+   - 候補: `review_year` と TE の交互作用（既に試した p15 系を単独で再検証）、`review_month` 系の時系列補助列。
+   - 目的: 2015 年の順位付け悪化（AUC 低下）を改善。
+
+2. **Documentary 向けの軽量な追加列を 1 本だけ検証**
+   - `genre_Documentary` が弱点なので、`genre_Documentary` と既存強特徴（`critic_name_te_ts` など）の交互作用を 1 列だけ試す。
+   - ただし大量追加は避ける（過去に段階追加でパブリック悪化済み）。
+
+3. **予測確率の校正状況を定点観測**
+   - AUC 自体は閾値非依存だが、現状は陽性寄り（FP 多め）なので、改善判定用に `pred_pos_rate - pos_rate` を毎回記録する。
+   - モデル比較時に「AUC + バイアス指標（FP/FN バランス）」を併用する。
+
+### 優先度 中
+
+4. **publisher_name_freq の追加（再検証）**
+   - 01 で微増実績あり。高カード由来の情報補完として再検証価値が高い。
+
+5. **lda_10 の追加（再検証）**
+   - テキスト系の中では最も改善幅があった設定。Documentary 弱点の補完を期待して 1 設定で検証。
+
+6. **LightGBM ハイパラ探索（小さく）**
+   - `num_leaves`, `min_child_samples`, `feature_fraction`, `lambda_l1/l2` を狭い範囲で探索し、過学習気味の特徴（CV 良化→Public 悪化）を抑える。
+
+### 優先度 低
+
+7. **0 重要度列の棚卸し**
+   - 0 重要度列を一時的に外した「圧縮ベース」を作り、CV と Public を比較（ノイズ削減の確認）。
+
+8. **監督・著者の軽量派生**
+   - TE/頻度ではなく、人数など低リーク・低自由度の派生のみ少数試す。
+
+---
+
+## 5. まとめ
+
+- **実施済み・結論**: 段階的組み合わせ（stage0〜9）はパブリックで全滅（ベース割れ）なので採用しない。
+- **新たな知見**: 弱点は `review_year=2015`, `genre_Documentary=1`, `top_critic=True`。また全体に陽性寄り判定で FP が多い。
+- **次の方針**: 「弱点セグメントに効く列を少数追加」＋「過学習を抑える調整」を行い、毎回 `train_with_predictions.csv` 系で誤差構造を追跡する。

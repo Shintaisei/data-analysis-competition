@@ -85,7 +85,7 @@
 **入力**: movie_info（あらすじ）。**共通**: 各 fold の tr のみで fit、val/te は transform のみ。ベース CV_AUC = **0.7600**（34 特徴）。  
 **結論**: いずれも **+0.0001〜0.0006** 程度の微増。あらすじ内容と Fresh の相関は弱い。
 
-### 6.1 記録済み結果（train_text_vector_experiments / text_vectors.py）
+### 6.1 記録済み結果（train_text_vector_experiments / lib.text_vectors）
 
 | 対象 | やったこと（処理） | 結果（CV_AUC / ベース比） |
 |------|-------------------|---------------------------|
@@ -146,7 +146,7 @@
 | 1 種類ずつ前処理変更 | train_extended.ipynb |
 | ベース＋1つ追加（重要度ベース） | train_importance_experiments.ipynb |
 | テキスト（TF-IDF・SVD・メタ） | train_text_experiments.ipynb |
-| テキストベクトル化網羅 | train_text_vector_experiments.ipynb, text_vectors.py |
-| 共通エンコーディング | experiment_encodings.py |
+| テキストベクトル化網羅 | train_text_vector_experiments.ipynb, lib.text_vectors |
+| 共通エンコーディング | lib.encodings |
 
 **続き**: 特徴量の掛け合わせ・交互作用は **docs/02_FEATURE_ENGINEERING.md**（特徴量エンジニアリング編）を参照。

@@ -1,7 +1,6 @@
 """
 実験用エンコーディング集。時系列CV用に「tr のみで統計を計算し val/te に適用」する関数。
 各関数は tr_df, val_df, te_df を in-place で更新し、追加した列名のリストを返す。
-※ ファイル名を experiment_encodings にしているのは、標準ライブラリの encodings と名前が衝突するため。
 """
 import numpy as np
 import pandas as pd

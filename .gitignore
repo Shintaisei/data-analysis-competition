@@ -13,6 +13,13 @@ __pycache__/
 data/
 cache/
 
+# 実行結果（ノート・スクリプトの出力）
+outputs/
+
+# ログ（nohup 等で出力したログ）
+*.log
+lgb_tuning.log
+
 # macOS
 .DS_Store
 

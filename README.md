@@ -6,17 +6,24 @@ Kaggle から移行したベースライン用のローカル環境です。
 
 ```
 ds_dojo4/
-├── data/                    # データ (train.csv, test.csv)
+├── data/                    # データ (train.csv, test.csv) ※ .gitignore で除外可
+├── docs/                    # ドキュメント（01 前処理, 02 特徴量, 03 分析, 04 評価指標）
+├── outputs/                 # 実行結果（ノートから自動出力）
+│   ├── submissions/         # 提出用 CSV (submission.csv, submission_*.csv)
+│   ├── analysis/            # 予測分析 (train_with_predictions.csv, prediction_summary_by_*.csv)
+│   └── experiments/        # 実験結果 (metric_driven_*.csv)
 ├── preprocess/              # 前処理（データ読み込み）
-│   ├── __init__.py
 │   └── preprocess.py        # get_data_dir(), load_train_test()
-├── feature_engineering/     # 特徴量エンジニアリング
-│   ├── __init__.py
-│   └── features.py          # create_features(), FEATURES（ホストベースライン同一）
-├── train_baseline.ipynb         # ベースライン（手付かずで戻れる基準）
-├── train_preprocess_compare.ipynb  # 前処理強化の比較（ベース vs TE あり）
-├── train_extended.ipynb         # 拡張用: 未使用列を追加しベース vs 拡張のスコア比較
-├── dojo4-host-baseline-v1-729d27.ipynb  # ホスト配布ベースライン（参照用）
+├── feature_engineering/     # 特徴量
+│   └── features.py         # create_features()
+├── lib/                     # ノートブック用ライブラリ（パイプライン・分析・エンコーディング・テキストベクトル）
+│   ├── pipeline.py          # get_baseline_data, BASELINE_FEATURES
+│   ├── analysis.py          # add_prediction_analysis, run_full_analysis 等
+│   ├── encodings.py         # 時系列 TE, movie_info_meta 等
+│   └── text_vectors.py     # build_vectors, get_available_configs 等
+├── train_baseline.ipynb    # ベースライン学習・CV・提出・予測分析
+├── train_metric_driven_experiments.ipynb  # 改善実験（評価指標拡張・複数 config 比較）
+├── 終わった実験環境/        # 過去ノート（参照用）
 ├── requirements.txt
 └── README.md
 ```
@@ -34,9 +41,10 @@ python3 -m venv .venv
 ## ノートブックの実行
 
 1. カーネルを **「Python 3 (ds_dojo4 .venv)」** または **「.venv」** に設定
-2. 実行するノートブックを開く
-   - **`train_baseline.ipynb`**: 前処理・特徴量は `preprocess` / `feature_engineering` を利用。時系列CVで学習し提出用 CSV を出力する。**いじらず基準として残す。**
-   - **`train_preprocess_compare.ipynb`**: train_baseline を複製。前処理が粗い 8 列に Target Encoding を追加し、「ベース（現状前処理のみ）」vs「強化（TE あり）」の CV AUC を比較。前処理でどれだけスコアが上がるか確認する。
-   - **`train_extended.ipynb`**: 上を複製した拡張用。未使用列を処理して追加し、「ベース（FEATURESのみ）」と「拡張（ベース+未使用列）」の CV AUC を比較。新しい特徴量・前処理を試すときはこのファイルで行う。
+2. 実行するノートブックを開く（プロジェクトルートでカーネルを起動すること）
+   - **`train_baseline.ipynb`**: `lib` からパイプライン・予測分析を利用。時系列CVで学習し提出用 CSV を出力。**いじらず基準として残す。**
+   - **`train_metric_driven_experiments.ipynb`**: 評価指標を拡張した改善実験。複数 config を比較し、ベスト設定の提出用 CSV を出力。
+   - **`train_lgb_tuning.ipynb`**: LightGBM のハイパーパラメータを Optuna で探索。特徴量はベースラインのまま、目先のスコア上げ用。
+   - **`終わった実験環境/`**: 過去の実験ノート（前処理比較・特徴量・テキストベクトル等）は参照用。
 
 データは `data/` フォルダを参照しています。
