@@ -9,6 +9,9 @@ __pycache__/
 *.so
 .Python
 
+# API キー（貼り付けた内容はコミットしない）
+config/openai_api_key.txt
+
 # データ・キャッシュ（重いのでリポジトリに含めない場合）
 data/
 cache/

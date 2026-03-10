@@ -7,7 +7,7 @@ import pandas as pd
 
 from preprocess import load_train_test
 from feature_engineering import create_features
-from .encodings import movie_info_meta
+from experiment_encodings import movie_info_meta
 
 # ベースラインで使う 38 特徴量（3C3 ＋ テキストメタ）
 BASELINE_FEATURES = [
@@ -51,35 +51,17 @@ BASELINE_FEATURES = [
     "movie_title_word_count",
 ]
 
-# ベースライン用 LightGBM パラメータ（train_baseline.ipynb と top_solutions で共通）
-# チューニングしたらここだけ更新すれば両方に反映される
-BASELINE_LGB_PARAMS = {
-    "objective": "binary",
-    "metric": "auc",
-    "boosting_type": "gbdt",
-    "random_state": 42,
-    "verbosity": -1,
-    "n_estimators": 1011,
-    "learning_rate": 0.04392,
-    "num_leaves": 74,
-    "min_data_in_leaf": 46,
-    "feature_fraction": 0.7514,
-    "reg_alpha": 0.9285,
-    "reg_lambda": 4.2552,
-    "max_depth": 10,
-}
-
 
 def _ts_te_col(df_tr, df_te, col, target_name="target", m=10):
     """時系列TE: tr は「その行より前」のみで平均、te は tr のカテゴリ別スムージング平均でマッピング。"""
     global_mean = float(df_tr[target_name].mean())
     tr_s = df_tr.sort_values("review_date")
-    g = tr_s.groupby(col, observed=True)[target_name]
+    g = tr_s.groupby(col)[target_name]
     past_sum = g.cumsum() - tr_s[target_name]
     past_count = g.cumcount()
     te_tr = np.where(past_count > 0, (past_sum + m * global_mean) / (past_count + m), global_mean)
     ser_tr = pd.Series(te_tr, index=tr_s.index)
-    agg = df_tr.groupby(col, observed=True)[target_name].agg(["mean", "count"])
+    agg = df_tr.groupby(col)[target_name].agg(["mean", "count"])
     agg["smooth"] = (agg["count"] * agg["mean"] + m * global_mean) / (agg["count"] + m)
     map_ = agg["smooth"].to_dict()
     te_arr = (

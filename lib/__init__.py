@@ -1,7 +1,7 @@
 """
 ノートブック用ライブラリ。パイプライン・予測分析・エンコーディング・テキストベクトルをまとめて提供。
 """
-from lib.pipeline import get_baseline_data, BASELINE_FEATURES, prepare_baseline_data
+from lib.pipeline import get_baseline_data, BASELINE_FEATURES, BASELINE_LGB_PARAMS, prepare_baseline_data
 from lib.analysis import add_prediction_analysis, summarize_errors_by, run_full_analysis
 from lib.encodings import (
     movie_info_meta,
@@ -19,6 +19,7 @@ from lib.text_vectors import build_vectors, get_available_configs, get_config_de
 __all__ = [
     "get_baseline_data",
     "BASELINE_FEATURES",
+    "BASELINE_LGB_PARAMS",
     "prepare_baseline_data",
     "add_prediction_analysis",
     "summarize_errors_by",
