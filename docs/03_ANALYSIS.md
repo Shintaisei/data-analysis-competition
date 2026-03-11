@@ -136,8 +136,51 @@
 
 ---
 
-## 5. まとめ
+## 5. Rotten（低評価）予測の改善 — 低評価の識別を強くする
+
+「本来 Rotten にすべきなのに予測確率が高く出る」状態は AUC を直接下げる（Rotten が Fresh より上に並んでしまう）。以下はコンペでもよく使う対策のメモ。
+
+### 5.1 学習時の重み
+
+Rotten を「大事なクラス」として扱い、損失で重みを付ける。
+
+| 方法 | 内容 |
+|------|------|
+| **scale_pos_weight** | LightGBM で `scale_pos_weight = (Rotten の件数) / (Fresh の件数)` を指定する。正例（Fresh）を基準に負例（Rotten）の重みを上げる。 |
+| **class_weight="balanced"** | `sklearn.utils.class_weight.compute_class_weight("balanced", ...)` で重みを計算し、`sample_weight` で渡す。LightGBM の `scale_pos_weight` と同等の意図。 |
+
+→ まずは **scale_pos_weight** を 1 本入れて CV / パブリックを比較する。
+
+### 5.2 どこで Rotten を外しているか見る
+
+既存の「セグメント別 AUC」と誤差集計を活用する。
+
+| やること | 内容 |
+|----------|------|
+| **Rotten が多いセグメント** | `prediction_summary_by_*.csv` や `train_with_predictions.csv` で、**正解が Rotten（target=0）の割合が高い**セグメントを特定する。 |
+| **FN が多いセグメント** | **FN（本来 Rotten なのに Fresh と予測）** の数や率が高いセグメントを出す。そこが「Rotten を識別できていない」箇所。 |
+| **次の一手** | そのセグメント用の特徴量を 1 本足す、またはそのセグメントのサンプルに `sample_weight` を強くする、などを検討する。 |
+
+→ `lib.analysis` の `run_full_analysis` / `summarize_errors_by` で出している `prediction_summary_by_*` と `outcome`（TP/TN/FP/FN）をセグメント別に見る。
+
+### 5.3 予測分布の確認
+
+「正解が Rotten の行」に対して、モデルがどれくらい低い確率を出せているかを定量的に見る。
+
+| やること | 内容 |
+|----------|------|
+| **対象** | CV の val で **正解が Rotten（y=0）の行** だけに絞り、その行の **予測確率 pred** の分布を見る。 |
+| **見方** | ヒストグラムや分位点（例: 25%点・中央値・75%点）。 |
+| **解釈** | Rotten なら低い pred（0.2 以下など）が出てほしい。**0.5〜0.8 にたくさん乗っている**場合は「Rotten に低いスコアを出せていない」証拠になる。 |
+| **次の一手** | 5.1 のクラス重みや、5.2 の弱点セグメント対策と組み合わせて改善を試す。 |
+
+→ 実装例: 時系列 CV の oof と `train["target"]` を組み合わせ、`target==0` の行の oof について `describe()` や `plt.hist()` で可視化する。
+
+---
+
+## 6. まとめ
 
 - **実施済み・結論**: 段階的組み合わせ（stage0〜9）はパブリックで全滅（ベース割れ）なので採用しない。
 - **新たな知見**: 弱点は `review_year=2015`, `genre_Documentary=1`, `top_critic=True`。また全体に陽性寄り判定で FP が多い。
 - **次の方針**: 「弱点セグメントに効く列を少数追加」＋「過学習を抑える調整」を行い、毎回 `train_with_predictions.csv` 系で誤差構造を追跡する。
+- **Rotten 対策**: 上記 §5 の「学習時の重み」「セグメント別 FN 分析」「Rotten の pred 分布確認」を試す。

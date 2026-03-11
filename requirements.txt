@@ -9,6 +9,8 @@ optuna>=3.0.0
 # OpenAI Embedding（1回だけベクトル化して保存する用）
 openai>=1.0.0
 pyarrow>=14.0.0
+# 次元削減（train_embedding_submission で UMAP を使う場合）
+umap-learn>=0.5.0
 
 # ノートブックで .venv をカーネルとして使うため
 ipykernel>=6.0

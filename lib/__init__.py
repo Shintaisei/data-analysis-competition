@@ -15,6 +15,7 @@ from lib.encodings import (
     ts_te_multi,
 )
 from lib.text_vectors import build_vectors, get_available_configs, get_config_descriptions
+from lib.submission import save_submission, verify_submission, sanitize_predictions
 
 __all__ = [
     "get_baseline_data",
@@ -36,4 +37,7 @@ __all__ = [
     "build_vectors",
     "get_available_configs",
     "get_config_descriptions",
+    "save_submission",
+    "verify_submission",
+    "sanitize_predictions",
 ]

@@ -247,8 +247,15 @@ def load_movie_info_embeddings(
     """
     path = Path(path) if path else DEFAULT_EMBEDDINGS_PATH
     pkl_path = path.with_suffix(".pkl")
+    if path.suffix.lower() == ".pkl" and path.exists():
+        return pd.read_pickle(path)
     if path.exists():
-        return pd.read_parquet(path)
+        try:
+            return pd.read_parquet(path)
+        except ImportError:
+            if pkl_path.exists():
+                return pd.read_pickle(pkl_path)
+            raise
     if pkl_path.exists():
         return pd.read_pickle(pkl_path)
     raise FileNotFoundError(
@@ -273,10 +280,16 @@ def compute_and_save_title_info_embeddings(
     """
     save_path = Path(save_path) if save_path else DEFAULT_TITLE_INFO_EMBEDDINGS_PATH
     if not force:
-        if save_path.exists():
-            return pd.read_parquet(save_path)
         pkl_path = save_path.with_suffix(".pkl")
-        if pkl_path.exists():
+        if save_path.suffix.lower() == ".pkl" and save_path.exists():
+            return pd.read_pickle(save_path)
+        if save_path.exists():
+            try:
+                return pd.read_parquet(save_path)
+            except ImportError:
+                if pkl_path.exists():
+                    return pd.read_pickle(pkl_path)
+        elif pkl_path.exists():
             return pd.read_pickle(pkl_path)
 
     _load_api_key_from_file()
@@ -323,8 +336,15 @@ def load_movie_title_info_embeddings(
     """保存済みの「タイトル+映画情報」embedding を読み込む。"""
     path = Path(path) if path else DEFAULT_TITLE_INFO_EMBEDDINGS_PATH
     pkl_path = path.with_suffix(".pkl")
+    if path.suffix.lower() == ".pkl" and path.exists():
+        return pd.read_pickle(path)
     if path.exists():
-        return pd.read_parquet(path)
+        try:
+            return pd.read_parquet(path)
+        except ImportError:
+            if pkl_path.exists():
+                return pd.read_pickle(pkl_path)
+            raise
     if pkl_path.exists():
         return pd.read_pickle(pkl_path)
     raise FileNotFoundError(
