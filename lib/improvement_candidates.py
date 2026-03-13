@@ -573,6 +573,7 @@ def _build_implicit_embeddings(
     ctx: ImprovementContext,
     method: str,
     factors: int,
+    bpr_kwargs: dict[str, Any] | None = None,
 ) -> tuple[pd.DataFrame, pd.DataFrame, list[str]]:
     """implicit で (critic, movie) 行列を分解し、ctx.train/test のコピーに埋め込み列を追加して返す。
     Returns:
@@ -619,7 +620,10 @@ def _build_implicit_embeddings(
     if method.lower() == "als":
         model_cf = implicit.als.AlternatingLeastSquares(factors=factors, random_state=42)
     elif method.lower() == "bpr":
-        model_cf = implicit.bpr.BayesianPersonalizedRanking(factors=factors, random_state=42)
+        kwargs: dict[str, Any] = {"factors": factors, "random_state": 42}
+        if bpr_kwargs:
+            kwargs.update(bpr_kwargs)
+        model_cf = implicit.bpr.BayesianPersonalizedRanking(**kwargs)
     else:
         raise ValueError(f"不明な method: {method}")
     model_cf.fit(mat)
@@ -661,9 +665,14 @@ def _build_implicit_embeddings(
     return tr, te, feats
 
 
-def get_bpr_base(ctx: ImprovementContext, factors: int = 16) -> tuple[pd.DataFrame, pd.DataFrame, list[str]]:
-    """BPR 埋め込みを追加した train/test と特徴名リストを返す。2-hop 等の実験の土台用。"""
-    return _build_implicit_embeddings(ctx, "bpr", factors)
+def get_bpr_base(
+    ctx: ImprovementContext,
+    factors: int = 16,
+    bpr_kwargs: dict[str, Any] | None = None,
+) -> tuple[pd.DataFrame, pd.DataFrame, list[str]]:
+    """BPR 埋め込みを追加した train/test と特徴名リストを返す。2-hop 等の実験の土台用。
+    bpr_kwargs で regularization, iterations 等を渡せる。"""
+    return _build_implicit_embeddings(ctx, "bpr", factors, bpr_kwargs=bpr_kwargs)
 
 
 def run_atmacup_implicit(

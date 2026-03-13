@@ -2,7 +2,7 @@
 
 本番ベースライン **Public 0.75493**（doc_x_critic_te）および `train_baseline.ipynb` の根幹が正しいことを確認した記録。
 
-**ベースライン更新**: 協調フィルタ（implicit BPR 16）で **Public 0.76101** を達成。現在の最高スコアは 0.76101。詳細は `docs/08_COLLABORATIVE_FILTERING.md` §5 の表を参照。
+**ベースライン更新**: 協調フィルタ（implicit BPR）で更新。BPR 16 で 0.76101、**BPR 64（submission_2hop_bpr64_only.csv）で Public 0.76479** を達成。**現在のベースライン（超える目標）は 0.76479**。詳細は `docs/08_COLLABORATIVE_FILTERING.md` §2.5・§5 の表を参照。次に試すべきこと（伸びそうな改善）は **`docs/09_IMPROVEMENT_NEXT.md`** にまとめてある。
 
 ---
 
@@ -55,4 +55,4 @@
 
 - **本番ベースライン 0.75493** を出すコード（doc_x_critic_te）は、上記の通りデータ・特徴量・PCA・LGB・提出まで整合している。
 - **train_baseline.ipynb** は 38 特徴・時系列 CV・提出用 1 本学習まで、説明とコードが一致している。
-- 今後の改善実験は、土台は同じ `get_baseline_data` / `BASELINE_FEATURES` / `BASELINE_LGB_PARAMS` のまま、**超える目標は現時点の最高 0.76101**（implicit BPR 16、08 協調フィルタ）とする。0.75493 は従来の「embedding 単体」ベースラインとして参照用に残す。
+- 今後の改善実験は、土台は同じ `get_baseline_data` / `BASELINE_FEATURES` / `BASELINE_LGB_PARAMS` のまま、**超える目標は現時点の最高 0.76479**（submission_2hop_bpr64_only.csv、BPR 64、08 協調フィルタ §2.5）とする。0.75493 / 0.76101 は従来のベースラインとして参照用に残す。
