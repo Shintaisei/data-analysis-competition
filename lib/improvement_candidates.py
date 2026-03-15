@@ -24,6 +24,7 @@ from sklearn.decomposition import TruncatedSVD
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import Ridge
 from sklearn.metrics import roc_auc_score
+from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.model_selection import GroupKFold
 
 import lightgbm as lgb
@@ -333,7 +334,14 @@ def run_03_stacking(ctx: ImprovementContext, seed: int | None = 42) -> dict[str,
         return {"ok": False, "message": f"xgboost/catboost 未導入: {e}"}
 
     use_seed = seed if seed is not None else 42
-    xgb_params = {"objective": "binary:logistic", "eval_metric": "auc", "random_state": use_seed, "verbosity": 0}
+    xgb_params = {
+        "objective": "binary:logistic",
+        "eval_metric": "auc",
+        "random_state": use_seed,
+        "verbosity": 0,
+        "enable_categorical": True,
+        "early_stopping_rounds": 30,
+    }
     cb_params = {"iterations": 1000, "learning_rate": 0.05, "verbose": False, "random_seed": use_seed}
     lgb_params = {**ctx.lgb_params, "random_state": use_seed}
 
@@ -349,13 +357,15 @@ def run_03_stacking(ctx: ImprovementContext, seed: int | None = 42) -> dict[str,
         oof_lgb = ml.predict_proba(X_val)[:, 1]
         t_lgb = ml.predict_proba(ctx.X_test)[:, 1]
 
-        mx = xgb.XGBClassifier(**xgb_params, early_stopping_rounds=30)
+        mx = xgb.XGBClassifier(**xgb_params)
         mx.fit(X_tr, y_tr, eval_set=[(X_val, y_val)], verbose=False)
         oof_xgb = mx.predict_proba(X_val)[:, 1]
         t_xgb = mx.predict_proba(ctx.X_test)[:, 1]
 
+        # CatBoost: DataFrame の場合は cat_features に列名を渡す（インデックスだと category 列を拾い損ねる場合がある）
+        cat_cols = [c for c in X_tr.columns if pd.api.types.is_categorical_dtype(X_tr[c])]
         mc = cb.CatBoostClassifier(**cb_params, early_stopping_rounds=30)
-        mc.fit(X_tr, y_tr, eval_set=(X_val, y_val))
+        mc.fit(X_tr, y_tr, eval_set=(X_val, y_val), cat_features=cat_cols if cat_cols else None)
         oof_cb = mc.predict_proba(X_val)[:, 1]
         t_cb = mc.predict_proba(ctx.X_test)[:, 1]
 
@@ -533,6 +543,95 @@ def run_02_similarity_te(
     return _save_and_verify(ctx.test, pred, path)
 
 
+# 1位で「特徴量的に一番効いていた」: その映画に類似した映画をその批評家が何本レビューしているか
+SIMILAR_MOVIES_REVIEWED_COUNT = "similar_movies_reviewed_count"
+
+
+def add_similar_movies_reviewed_count(
+    train_df: pd.DataFrame,
+    test_df: pd.DataFrame,
+    embeddings_dir: Path | None = None,
+    embedding_name: str = "movie_title_info",
+    top_k: int = 20,
+) -> str:
+    """映画 embedding のコサイン類似で「その映画に類似した映画をその批評家が何本レビューしているか」を 1 列追加（in-place）。
+    戻り値: 追加した列名。"""
+    if embeddings_dir is None:
+        embeddings_dir = EMBEDDINGS_DIR
+    path = embeddings_dir / Path(EMBEDDING_CONFIGS[embedding_name]["path"]).name
+    if not path.exists():
+        path = path.with_suffix(".parquet")
+    if not path.exists():
+        raise FileNotFoundError(f"embedding がありません: {path}")
+
+    if EMBEDDING_CONFIGS[embedding_name].get("loader") == "title_info":
+        from .openai_embeddings import load_movie_title_info_embeddings
+        emb_df = load_movie_title_info_embeddings(path=path)
+    else:
+        from .openai_embeddings import load_movie_info_embeddings
+        emb_df = load_movie_info_embeddings(path=path)
+    emb_cols = [c for c in emb_df.columns if c != "rotten_tomatoes_link"]
+    if not emb_cols:
+        raise ValueError("embedding にベクトル列がありません")
+
+    all_links = pd.concat([
+        train_df[["rotten_tomatoes_link"]].drop_duplicates(),
+        test_df[["rotten_tomatoes_link"]].drop_duplicates(),
+    ]).drop_duplicates().squeeze()
+    movie_order = all_links.tolist()
+    M = emb_df.set_index("rotten_tomatoes_link").reindex(movie_order)[emb_cols].fillna(0).values.astype(np.float32)
+    M = M / (np.linalg.norm(M, axis=1, keepdims=True) + 1e-9)
+    S = cosine_similarity(M)
+    link_to_idx = {m: i for i, m in enumerate(movie_order)}
+
+    similar_sets: dict[Any, set] = {}
+    for i, m in enumerate(movie_order):
+        idx = np.argsort(S[i])[::-1]
+        similar_sets[m] = set(movie_order[idx[j]] for j in range(1, min(top_k + 1, len(idx))))
+
+    critic_movies: dict[Any, set] = defaultdict(set)
+    for _, row in train_df.iterrows():
+        critic_movies[row["critic_name"]].add(row["rotten_tomatoes_link"])
+
+    def count_for_row(row: pd.Series) -> int:
+        c, m = row["critic_name"], row["rotten_tomatoes_link"]
+        return len(critic_movies.get(c, set()) & similar_sets.get(m, set()))
+
+    train_df[SIMILAR_MOVIES_REVIEWED_COUNT] = train_df.apply(count_for_row, axis=1)
+    test_df[SIMILAR_MOVIES_REVIEWED_COUNT] = test_df.apply(count_for_row, axis=1)
+    return SIMILAR_MOVIES_REVIEWED_COUNT
+
+
+def run_similar_movies_reviewed(
+    ctx: ImprovementContext,
+    embeddings_dir: Path | None = None,
+    top_k: int = 20,
+    bpr_factors: int = 64,
+    use_existing_features: bool = False,
+) -> dict[str, Any]:
+    """BPR 64 ベース（または use_existing_features=True で ctx の特徴そのまま）に「類似映画をその批評家が何本レビューしたか」1 列を足して学習・提出。"""
+    if embeddings_dir is None:
+        embeddings_dir = ctx.submissions_dir.parent / "embeddings"
+    if use_existing_features:
+        train_df = ctx.train.copy()
+        test_df = ctx.test.copy()
+        add_similar_movies_reviewed_count(train_df, test_df, embeddings_dir=embeddings_dir, top_k=top_k)
+        feats = list(ctx.features) + [SIMILAR_MOVIES_REVIEWED_COUNT]
+    else:
+        train_df, test_df, feats = get_bpr_base(ctx, factors=bpr_factors)
+        add_similar_movies_reviewed_count(train_df, test_df, embeddings_dir=embeddings_dir, top_k=top_k)
+        feats = feats + [SIMILAR_MOVIES_REVIEWED_COUNT]
+    for col in feats:
+        if not pd.api.types.is_numeric_dtype(train_df[col]) and not pd.api.types.is_categorical_dtype(train_df[col]):
+            train_df[col] = train_df[col].astype("category")
+            test_df[col] = test_df[col].astype("category")
+    model = lgb.LGBMClassifier(**ctx.lgb_params)
+    model.fit(train_df[feats], ctx.y)
+    pred = model.predict_proba(test_df[feats])[:, 1]
+    path = ctx.submissions_dir / "submission_similar_movies_reviewed.csv"
+    return _save_and_verify(ctx.test, pred, path)
+
+
 def run_atmacup_ratio(
     ctx: ImprovementContext,
     base_feature: str,
@@ -704,6 +803,102 @@ def run_atmacup_implicit(
     pred = model.predict_proba(X_te)[:, 1]
     path = ctx.submissions_dir / f"submission_atmacup_implicit_{suffix}.csv"
     return _save_and_verify(ctx.test, pred, path)
+
+
+def run_gnn_bipartite_submission(
+    ctx: ImprovementContext,
+    *,
+    hidden_dim: int = 64,
+    num_layers: int = 2,
+    lr: float = 1e-2,
+    epochs: int = 200,
+    seed: int = 42,
+    out_name: str = "submission_gnn_bipartite.csv",
+    model_dir: Path | None = None,
+) -> dict[str, Any]:
+    """二部グラフ GNN（批評家–映画）で学習・予測し、提出 CSV を保存する。
+    model_dir を渡すと学習後にモデルを保存し、次回は保存済みを読み込んで予測のみ行う。
+    None のときは gnn_bipartite のデフォルト（outputs/models）を使う。"""
+    try:
+        from .gnn_bipartite import run_gnn_bipartite
+    except ImportError as e:
+        return {"ok": False, "path": str(ctx.submissions_dir / out_name), "message": str(e)}
+    return run_gnn_bipartite(
+        ctx.train,
+        ctx.test,
+        ctx.submissions_dir,
+        hidden_dim=hidden_dim,
+        num_layers=num_layers,
+        lr=lr,
+        epochs=epochs,
+        seed=seed,
+        out_name=out_name,
+        model_dir=model_dir,
+    )
+
+
+def run_bert_deberta_submission(
+    ctx: ImprovementContext,
+    *,
+    model_name: str = "answerdotai/ModernBERT-base",
+    n_folds: int = 2,
+    max_length: int = 512,
+    batch_size: int = 16,
+    epochs: int = 2,
+    lr: float = 2e-5,
+    seed: int = 42,
+    out_name: str = "submission_modernbert.csv",
+    cv_strategy: str = "stratified",
+    use_fill_map: bool = True,
+    cache_dir: Path | None = None,
+    cache_name: str | None = None,
+) -> dict[str, Any]:
+    """BERT/ModernBERT/DeBERTa で行テキストを分類し、提出 CSV を保存する。
+    cache_dir を指定すると fold ごとに予測をキャッシュし、再開可能。"""
+    try:
+        from .bert_improved import run_bert_submission
+    except ImportError as e:
+        return {"ok": False, "path": ctx.submissions_dir / out_name, "message": str(e)}
+    return run_bert_submission(
+        ctx.train,
+        ctx.test,
+        ctx.submissions_dir,
+        model_name=model_name,
+        n_folds=n_folds,
+        max_length=max_length,
+        batch_size=batch_size,
+        epochs=epochs,
+        lr=lr,
+        seed=seed,
+        out_name=out_name,
+        cv_strategy=cv_strategy,
+        use_fill_map=use_fill_map,
+        cache_dir=cache_dir,
+        cache_name=cache_name,
+    )
+
+
+def run_bert_blend_with_best(
+    ctx: ImprovementContext,
+    *,
+    best_name: str = "submission_blend_bpr64_count1_bpr128.csv",
+    bert_name: str = "submission_modernbert.csv",
+    out_name: str = "submission_blend_best_bert.csv",
+    weight_best: float = 0.5,
+) -> dict[str, Any]:
+    """現在の最高精度提出（0.76591 のブレンド）と BERT/ModernBERT の予測を加重平均し、1本保存する。"""
+    try:
+        from .bert_improved import blend_with_best_submission
+    except ImportError as e:
+        return {"ok": False, "path": ctx.submissions_dir / out_name, "message": str(e)}
+    return blend_with_best_submission(
+        ctx.submissions_dir,
+        ctx.test,
+        best_name=best_name,
+        bert_name=bert_name,
+        out_name=out_name,
+        weight_best=weight_best,
+    )
 
 
 def list_improvement_submissions(submissions_dir: Path) -> list[Path]:

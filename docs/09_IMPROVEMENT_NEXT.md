@@ -37,8 +37,19 @@
 
 ---
 
-## 4. 参照
+## 4. 劇的に上げる場合に試すこと
 
+| 内容 | やり方 | コスト |
+|------|--------|--------|
+| **その映画に類似した映画をその批評家が何本レビューしているか** | 1位で「特徴量的に一番効いていた」。映画 embedding のコサイン類似で top-k 類似映画を求め、その批評家がレビューした本数を 1 列に。 | **実装済み**: `run_similar_movies_reviewed(ctx, top_k=20)` → `submission_similar_movies_reviewed.csv`。要 `outputs/embeddings/` の movie_title_info embedding。 |
+| **メタの 2-hop（target を使わない）** | 批評家ごとに映画メタ（runtime, genre 等）を集約 → 映画ごとにその集約をさらに集約。リークなし。 | 未実装。中コスト。 |
+| **NN を 1 本アンサンブルに** | 55+BPR64 を MLP で学習し、LGB とブレンド。1位はこれで伸ばした。 | 未実装。高コスト。 |
+
+---
+
+## 5. 参照
+
+- **1位解法との対応・改良の余地の全項目**: `docs/10_FIRST_PLACE_AND_IMPROVEMENT_REMAINING.md`
 - 協調フィルタの詳細・結果表・軸の説明: `docs/08_COLLABORATIVE_FILTERING.md`（§5.5〜§5.7）
 - ベースライン検証: `docs/BASELINE_VERIFICATION.md`
-- 実装: `lib/improvement_candidates.py`（`run_atmacup_implicit`, `get_bpr_base`）、`lib/two_hop.py`（`run_experiment`, `TWO_HOP_REVIEW_COUNT`）
+- 実装: `lib/improvement_candidates.py`（`run_atmacup_implicit`, `get_bpr_base`, `run_similar_movies_reviewed`）、`lib/two_hop.py`（`run_experiment`, `TWO_HOP_REVIEW_COUNT`）

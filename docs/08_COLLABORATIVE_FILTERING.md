@@ -486,6 +486,8 @@ unseen が存在するコンペでは、atmaCup #15 の「CV = seen×0.77 + unse
 
 ## 7. 参照
 
+- **1位解法との対応・改良の余地（全項目）**: `docs/10_FIRST_PLACE_AND_IMPROVEMENT_REMAINING.md`  
+- 伸びそうな改善一覧: `docs/09_IMPROVEMENT_NEXT.md`  
 - 改善候補全体: `docs/07_IMPROVEMENT_CANDIDATES.md`  
 - 実装: `lib/improvement_candidates.py`（`run_atmacup_ratio`, `run_atmacup_implicit`, `get_bpr_base`）  
 - 2-hop 実験: `lib/two_hop.py`（`add_2hop_features`, `run_experiment`）、`train_2hop_experiments.ipynb`  

@@ -15,6 +15,15 @@ pyarrow>=14.0.0
 # 次元削減（train_embedding_submission で UMAP を使う場合）
 umap-learn>=0.5.0
 
+# GNN（二部グラフ・提出用）
+torch>=2.0.0
+torch_geometric>=2.3.0
+
+# BERT/ModernBERT/DeBERTa（1位共有・テキスト分類提出用。ModernBERT は 4.48+ 推奨）
+transformers>=4.48.0
+datasets>=2.14.0
+accelerate>=0.20.0
+
 # ノートブックで .venv をカーネルとして使うため
 ipykernel>=6.0
 jupyter>=1.0

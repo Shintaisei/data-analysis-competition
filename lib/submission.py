@@ -123,3 +123,36 @@ def verify_submission(
         )
     )
     return result
+
+
+def blend_two_submissions(
+    path_a: str | Path,
+    path_b: str | Path,
+    out_path: str | Path,
+    weight_a: float = 0.5,
+    id_col: str = "ID",
+    target_col: str = "target",
+    test_ids: np.ndarray | pd.Series | None = None,
+) -> dict[str, Any]:
+    """
+    2 本の提出 CSV を weight_a : (1 - weight_a) で加重平均し out_path に保存する。
+    test_ids を渡すと行順をその ID 順に揃える（欠損は 0.5 で埋める）。
+    """
+    path_a, path_b, out_path = Path(path_a), Path(path_b), Path(out_path)
+    if not path_a.exists():
+        return {"ok": False, "path": str(out_path), "message": f"ファイルがありません: {path_a.name}"}
+    if not path_b.exists():
+        return {"ok": False, "path": str(out_path), "message": f"ファイルがありません: {path_b.name}"}
+    weight_b = 1.0 - weight_a
+    a = pd.read_csv(path_a)[[id_col, target_col]].rename(columns={target_col: "a"})
+    b = pd.read_csv(path_b)[[id_col, target_col]].rename(columns={target_col: "b"})
+    m = a.merge(b, on=id_col)
+    m[target_col] = (weight_a * m["a"] + weight_b * m["b"]).astype(np.float64)
+    if test_ids is not None:
+        m = m.set_index(id_col).reindex(pd.Series(test_ids).values).reset_index()
+        m[target_col] = m[target_col].fillna(0.5)
+    m = m[[id_col, target_col]]
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    m[target_col] = sanitize_predictions(m[target_col].values)
+    m.to_csv(out_path, index=False)
+    return {"ok": True, "path": out_path, "message": "OK"}
