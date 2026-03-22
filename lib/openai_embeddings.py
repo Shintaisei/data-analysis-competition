@@ -23,6 +23,17 @@ DEFAULT_TITLE_INFO_EMBEDDINGS_PATH = DEFAULT_EMBEDDINGS_DIR / "movie_title_info_
 
 # API キーを貼るファイル（プロジェクトルートからの相対）
 CONFIG_KEY_FILE = Path("config/openai_api_key.txt")
+
+
+def _safe_read_pickle(pkl_path: Path) -> pd.DataFrame:
+    """pkl を読み、壊れていれば分かりやすいエラーにする。"""
+    try:
+        return pd.read_pickle(pkl_path)
+    except EOFError as e:
+        raise EOFError(
+            f"Embedding ファイルが壊れているか途中で切れています: {pkl_path}\n"
+            "対処: 該当ファイルを削除し、embedding を再生成してください。"
+        ) from e
 CONFIG_KEY_FILE_EXAMPLE = Path("config/openai_api_key.example.txt")
 
 
@@ -248,16 +259,16 @@ def load_movie_info_embeddings(
     path = Path(path) if path else DEFAULT_EMBEDDINGS_PATH
     pkl_path = path.with_suffix(".pkl")
     if path.suffix.lower() == ".pkl" and path.exists():
-        return pd.read_pickle(path)
+        return _safe_read_pickle(path)
     if path.exists():
         try:
             return pd.read_parquet(path)
         except ImportError:
             if pkl_path.exists():
-                return pd.read_pickle(pkl_path)
+                return _safe_read_pickle(pkl_path)
             raise
     if pkl_path.exists():
-        return pd.read_pickle(pkl_path)
+        return _safe_read_pickle(pkl_path)
     raise FileNotFoundError(
         f"Embedding ファイルが見つかりません: {path} または {pkl_path}\n"
         "先に compute_and_save_movie_info_embeddings(force=True) または "
@@ -337,16 +348,16 @@ def load_movie_title_info_embeddings(
     path = Path(path) if path else DEFAULT_TITLE_INFO_EMBEDDINGS_PATH
     pkl_path = path.with_suffix(".pkl")
     if path.suffix.lower() == ".pkl" and path.exists():
-        return pd.read_pickle(path)
+        return _safe_read_pickle(path)
     if path.exists():
         try:
             return pd.read_parquet(path)
         except ImportError:
             if pkl_path.exists():
-                return pd.read_pickle(pkl_path)
+                return _safe_read_pickle(pkl_path)
             raise
     if pkl_path.exists():
-        return pd.read_pickle(pkl_path)
+        return _safe_read_pickle(pkl_path)
     raise FileNotFoundError(
         f"Embedding ファイルが見つかりません: {path} または {pkl_path}\n"
         "先に compute_and_save_title_info_embeddings(force=True) または "

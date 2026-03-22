@@ -10,6 +10,11 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
+try:
+    from pandas.errors import EmptyDataError
+except ImportError:
+    EmptyDataError = None  # pandas < 1.0
+
 
 def sanitize_predictions(pred: np.ndarray) -> np.ndarray:
     """
@@ -152,6 +157,63 @@ def blend_two_submissions(
         m = m.set_index(id_col).reindex(pd.Series(test_ids).values).reset_index()
         m[target_col] = m[target_col].fillna(0.5)
     m = m[[id_col, target_col]]
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    m[target_col] = sanitize_predictions(m[target_col].values)
+    m.to_csv(out_path, index=False)
+    return {"ok": True, "path": out_path, "message": "OK"}
+
+
+def blend_n_submissions(
+    paths: list[str | Path],
+    weights: list[float],
+    out_path: str | Path,
+    id_col: str = "ID",
+    target_col: str = "target",
+    test_ids: np.ndarray | pd.Series | None = None,
+) -> dict[str, Any]:
+    """
+    N 本の提出 CSV を weights で加重平均し out_path に保存する。
+    len(weights) は len(paths) と一致し、合計は 1.0 である必要はない（正規化する）。
+    """
+    paths = [Path(p) for p in paths]
+    out_path = Path(out_path)
+    for p in paths:
+        if not p.exists():
+            return {"ok": False, "path": str(out_path), "message": f"ファイルがありません: {p.name}"}
+    if len(weights) != len(paths):
+        return {"ok": False, "path": str(out_path), "message": "paths と weights の長さが一致しません"}
+    w = np.asarray(weights, dtype=np.float64)
+    w_sum = w.sum()
+    if w_sum == 0:
+        return {"ok": False, "path": str(out_path), "message": "weights の合計が 0 です"}
+    w = w / w_sum
+    dfs = []
+    for p in paths:
+        if p.stat().st_size == 0:
+            return {"ok": False, "path": str(out_path), "message": f"空のファイルです: {p.name}"}
+        try:
+            df = pd.read_csv(p)[[id_col, target_col]]
+        except Exception as e:
+            err_msg = str(e).lower()
+            err_name = type(e).__name__
+            if EmptyDataError is not None and isinstance(e, EmptyDataError):
+                return {"ok": False, "path": str(out_path), "message": f"空または不正なCSVです: {p.name}"}
+            if "EmptyDataError" in err_name or "empty" in err_msg or "no columns to parse" in err_msg:
+                return {"ok": False, "path": str(out_path), "message": f"空または不正なCSVです: {p.name}"}
+            raise
+        if len(df) == 0:
+            return {"ok": False, "path": str(out_path), "message": f"行が0件です: {p.name}"}
+        dfs.append(df)
+    m = dfs[0].copy()
+    m = m.rename(columns={target_col: "p0"})
+    for i, df in enumerate(dfs[1:], start=1):
+        m = m.merge(df.rename(columns={target_col: f"p{i}"}), on=id_col)
+    pred_cols = [c for c in m.columns if c.startswith("p")]
+    m[target_col] = sum(m[c] * w[i] for i, c in enumerate(pred_cols))
+    m = m[[id_col, target_col]]
+    if test_ids is not None:
+        m = m.set_index(id_col).reindex(pd.Series(test_ids).values).reset_index()
+        m[target_col] = m[target_col].fillna(0.5)
     out_path.parent.mkdir(parents=True, exist_ok=True)
     m[target_col] = sanitize_predictions(m[target_col].values)
     m.to_csv(out_path, index=False)
